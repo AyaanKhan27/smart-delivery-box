@@ -1,1 +1,3 @@
-const CACHE='sdb-v1';self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./','./index.html','./manifest.webmanifest']))));self.addEventListener('fetch',e=>{if(e.request.url.startsWith('https://broker.hivemq.com')||e.request.url.includes('unpkg.com'))return;e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))});
+const CACHE='sdb-v2';
+self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(['./','./index.html','./manifest.webmanifest']))));
+self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));

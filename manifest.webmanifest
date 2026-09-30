@@ -1,9 +1,9 @@
 {
-  "name": "Smart Delivery Box",
-  "short_name": "SmartBox",
-  "start_url": ".",
-  "display": "standalone",
-  "background_color": "#07111f",
-  "theme_color": "#07111f",
-  "description": "Smart Delivery Box resident and courier web interface."
+  "name":"Smart Delivery Box",
+  "short_name":"Smart Locker",
+  "start_url":"./?role=resident",
+  "display":"standalone",
+  "background_color":"#f3f4f6",
+  "theme_color":"#111827",
+  "icons":[]
 }

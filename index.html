@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07111f"><link rel="manifest" href="manifest.webmanifest">
+<title>Smart Delivery Box</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#07111f;color:#eef6ff;font-family:Inter,system-ui,Arial;min-height:100vh}
+header{padding:18px 18px 12px;position:sticky;top:0;background:#07111fee;backdrop-filter:blur(14px);z-index:5;border-bottom:1px solid #20344e}
+.brand{font-weight:850;letter-spacing:.5px}.sub{font-size:11px;color:#91a9c2;margin-top:3px}
+main{max-width:560px;margin:auto;padding:16px}.screen{background:#0c1828;border:1px solid #233b56;border-radius:22px;padding:18px;margin-bottom:14px;box-shadow:0 18px 50px #0005}
+h2{font-size:18px;margin:0 0 8px}.muted{color:#91a9c2}.tiny{font-size:11px}.row{display:flex;gap:8px;flex-wrap:wrap}
+button{width:100%;padding:13px;border-radius:12px;border:1px solid #31516f;background:#10243a;color:white;font-weight:700;cursor:pointer}
+button.primary{background:#155273;border-color:#3e9bc2}button.secondary{background:#0d1725}
+input,select{width:100%;padding:13px;border-radius:11px;border:1px solid #2b4561;background:#081321;color:#fff;font-size:16px}
+label{display:grid;gap:6px;font-size:11px;color:#91a9c2;margin-top:10px}
+.card{border:1px solid #243e59;background:#0a1625;border-radius:15px;padding:13px;margin-top:10px}
+.otp{font-size:32px;letter-spacing:8px;text-align:center;padding:14px;border-radius:13px;background:#101f31;margin:10px 0}
+.status{display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:5px 8px;border-radius:999px;border:1px solid #275f4b;background:#0c2920;color:#7bf0b8}.off{border-color:#6a3542;background:#2a151d;color:#ff9aac}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:14px}.tabs button{font-size:11px;padding:10px}
+.tabactive{outline:2px solid #38bde9}
+.hidden{display:none!important}.bay{display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid #28415d;border-radius:12px;margin-top:8px}.free{color:#67e6aa}.occupied{color:#ffc65c}
+.log{font:11px ui-monospace,monospace;max-height:170px;overflow:auto}.log div{padding:6px 0;border-bottom:1px solid #172a40}
+</style>
+</head>
+<body>
+<header><div class="brand">SMART DELIVERY BOX</div><div class="sub">Secure parcel delivery • mobile web app + QR courier access</div></header>
+<main>
+<div class="tabs">
+<button id="tResident" class="tabactive" onclick="show('resident')">Resident</button>
+<button id="tCourier" onclick="show('courier')">Courier Web</button>
+<button id="tAdmin" onclick="show('admin')">Admin</button>
+</div>
+
+<section id="resident">
+<div class="screen">
+<span id="conn" class="status off">● Connecting</span>
+<h2 style="margin-top:15px">Your parcel</h2>
+<div id="parcelCard" class="card">No parcel waiting.</div>
+<label>Pickup OTP
+<input id="otp" inputmode="numeric" maxlength="4" placeholder="Enter 4-digit OTP">
+</label>
+<button class="primary" style="margin-top:10px" onclick="residentUnlock()">Verify OTP & open locker</button>
+<div class="tiny muted" style="margin-top:10px">The physical locker keypad can also accept the same OTP.</div>
+</div>
+<div class="screen"><h2>Locker status</h2><div id="residentBays"></div></div>
+</section>
+
+<section id="courier" class="hidden">
+<div class="screen">
+<span class="status">● QR COURIER ACCESS</span>
+<h2 style="margin-top:15px">Delivery Box #SDB-01</h2>
+<p class="muted tiny">No app required. This page is opened by scanning the QR code printed on the delivery box.</p>
+<label>Order / Parcel ID<input id="cParcel" value="PKG-2026-001"></label>
+<label>Recipient<input id="cRecipient" value="Aditi"></label>
+<label>Compartment<select id="cBay"></select></label>
+<button class="primary" style="margin-top:10px" onclick="courierOpen()">Open selected bay</button>
+<button class="secondary" style="margin-top:8px" onclick="courierLock()">Lock selected bay</button>
+<div id="courierResult" class="card">Ready for delivery.</div>
+</div>
+<div class="screen"><h2>How it works</h2><div class="card">① Scan QR on box</div><div class="card">② Select the assigned bay</div><div class="card">③ Place parcel</div><div class="card">④ Tap Lock / close bay</div><div class="card">⑤ Resident receives OTP</div></div>
+</section>
+
+<section id="admin" class="hidden">
+<div class="screen"><h2>Admin / live control</h2><div id="adminBays"></div></div>
+<div class="screen"><h2>Event log</h2><div id="log" class="log"></div></div>
+</section>
+</main>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script>
+const TOPIC='sdb/demo/smart-delivery-box-ayaan-v1';
+const NAMES=['SMALL 1','SMALL 2','MEDIUM 1','MEDIUM 2','LARGE 1'];
+const SIZE=['Small','Small','Medium','Medium','Large'];
+let bays=NAMES.map((name,i)=>({id:i+1,name,size:SIZE[i],status:'free',door:false,parcel:null,recipient:null,otp:null}));
+let client=null,connected=false,logs=[];
+const $=id=>document.getElementById(id);
+function log(s){logs.unshift(new Date().toLocaleTimeString()+'  '+s);$('log').innerHTML=logs.slice(0,60).map(x=>'<div>'+x+'</div>').join('')}
+function publish(o){if(connected)client.publish(TOPIC+'/cmd',JSON.stringify({...o,ts:Date.now()}));log('→ '+JSON.stringify(o))}
+function connect(){
+ client=mqtt.connect('wss://broker.hivemq.com:8884/mqtt',{clientId:'sdb-mobile-'+Math.random().toString(16).slice(2),clean:true,reconnectPeriod:2500});
+ client.on('connect',()=>{connected=true;$('conn').className='status';$('conn').textContent='● Connected';client.subscribe(TOPIC+'/state');log('MQTT connected')});
+ client.on('message',(t,m)=>{
+  try{
+    const st=JSON.parse(m.toString());
+    const b=bays[st.compartment-1];
+    if(!b)return;
+    if(st.state==='occupied'){
+      b.status='occupied'; b.door=false;
+      if(st.otp)b.otp=st.otp;
+      if(st.parcel)b.parcel=st.parcel;
+      if(st.recipient)b.recipient=st.recipient;
+    }else if(st.state==='unlocked'){
+      b.door=true;
+      if(st.otp)b.otp=st.otp;
+      if(st.parcel)b.parcel=st.parcel;
+      if(st.recipient)b.recipient=st.recipient;
+    }else if(st.state==='free'){
+      b.status='free'; b.door=false; b.otp=null; b.parcel=null; b.recipient=null;
+    }else if(st.state==='locked'){
+      b.door=false;
+    }
+    render();
+  }catch(e){log('state: '+m.toString())}
+});
+ client.on('close',()=>{connected=false;$('conn').className='status off';$('conn').textContent='● Reconnecting'});
+}
+function show(which){
+ ['resident','courier','admin'].forEach(x=>$(x).classList.toggle('hidden',x!==which));
+ ['tResident','tCourier','tAdmin'].forEach((id,i)=>$(id).classList.toggle('tabactive',['resident','courier','admin'][i]===which));
+ render();
+}
+function render(){
+ const occ=bays.filter(b=>b.status==='occupied'),active=occ[0];
+ $('parcelCard').innerHTML=active?`<b>Parcel ${active.parcel||'ready'}</b><div class="tiny muted">${active.name} • ${active.recipient||''}</div><div class="otp">${active.otp||'••••'}</div><div class="tiny muted">One-time pickup code</div>`:'No parcel waiting.';
+ $('residentBays').innerHTML=bays.map(b=>`<div class="bay"><div><b>${b.name}</b><div class="tiny muted">${b.size}</div></div><span class="${b.status==='occupied'?'occupied':'free'}">${b.door?'UNLOCKED':b.status.toUpperCase()}</span></div>`).join('');
+ const free=bays.filter(b=>b.status==='free');$('cBay').innerHTML=free.length?free.map(b=>`<option value="${b.id}">${b.name} — ${b.size}</option>`).join(''):'<option>No free bay</option>';
+ $('adminBays').innerHTML=bays.map(b=>`<div class="bay"><div><b>${b.name}</b><div class="tiny muted">${b.parcel||'empty'}</div></div><button style="width:auto" onclick="adminUnlock(${b.id})">${b.door?'Lock':'Open'}</button></div>`).join('');
+}
+function residentUnlock(){
+ const code=$('otp').value.trim(),b=bays.find(x=>x.otp===code&&x.status==='occupied');
+ if(!b){log('Resident OTP rejected');alert('Invalid OTP');return}
+ publish({action:'unlock',compartment:b.id,otp:code,role:'resident'});
+ b.door=true;render();log('Resident authenticated '+b.name);
+ setTimeout(()=>{publish({action:'collect',compartment:b.id,role:'resident'});b.door=false;b.status='free';b.parcel=b.recipient=b.otp=null;$('otp').value='';render();log('Parcel collected from '+b.name)},3500);
+}
+function courierOpen(){
+ const id=Number($('cBay').value),b=bays.find(x=>x.id===id);if(!b)return;
+ b.parcel=$('cParcel').value||'PKG-DEMO';b.recipient=$('cRecipient').value||'Recipient';b.door=true;
+ publish({action:'unlock',compartment:id,role:'courier',parcel:b.parcel});
+ $('courierResult').innerHTML='<b>Bay unlocked.</b><div class="tiny muted">Place parcel, then tap Lock.</div>';render();
+}
+function courierLock(){
+ const id=Number($('cBay').value),b=bays.find(x=>x.id===id);if(!b)return;
+ b.door=false;b.status='occupied';b.otp=String(Math.floor(1000+Math.random()*9000));
+ publish({action:'lock',compartment:id,role:'courier',parcel:b.parcel,recipient:b.recipient,otp:b.otp});
+ $('courierResult').innerHTML=`<b>Delivery accepted.</b><div class="tiny muted">${b.name} locked for ${b.recipient}.</div><div class="otp">${b.otp}</div><div class="tiny muted">Send this OTP to the resident through your normal delivery/notification channel.</div>`;
+ log('Courier locked '+b.name+'; OTP '+b.otp);render();
+}
+function adminUnlock(id){const b=bays.find(x=>x.id===id);b.door=!b.door;publish({action:b.door?'unlock':'lock',compartment:id,role:'admin'});log('Admin '+(b.door?'opened ':'locked ')+b.name);render()}
+const role=new URLSearchParams(location.search).get('role');
+if(role==='courier') show('courier');
+else if(role==='admin') show('admin');
+else show('resident');
+connect();render();log('Smart Delivery Box mobile web app started');
+</script>
+</body></html>

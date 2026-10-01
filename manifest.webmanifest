@@ -1,1 +1,9 @@
-{"name":"Smart Delivery Box","short_name":"Delivery Box","start_url":"./","display":"standalone","background_color":"#f4f6f8","theme_color":"#111827","icons":[]}
+{
+  "name":"Smart Delivery Box",
+  "short_name":"Smart Locker",
+  "start_url":"./?role=resident",
+  "display":"standalone",
+  "background_color":"#f3f4f6",
+  "theme_color":"#111827",
+  "icons":[]
+}

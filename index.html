@@ -76,8 +76,9 @@ button.danger{background:#dc2626;color:#fff;border:0;font-weight:700}
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
-const TOPIC='sdb/demo/smart-delivery-box-ayaan-v2';
-const client=mqtt.connect('wss://broker.hivemq.com:8884/mqtt',{clientId:'sdb-web-'+Math.random().toString(16).slice(2)});
+const TOPIC='sdb/demo/smart-delivery-box-ayaan-v3';
+const MQTT_URL='wss://broker.emqx.io:8084/mqtt';
+const client=mqtt.connect(MQTT_URL,{clientId:'sdb-web-'+Math.random().toString(16).slice(2),clean:true,keepalive:30,connectTimeout:10000,reconnectPeriod:3000,resubscribe:true});
 const bays=[
  {id:1,name:'SMALL 1',size:'small',servo:4,led:2,state:'free'},
  {id:2,name:'SMALL 2',size:'small',servo:5,led:19,state:'free'},
@@ -136,8 +137,11 @@ function adminClear(id){publish({action:'clear',compartment:id,role:'admin'})}
 function clearAll(){bays.forEach(b=>{if(b.state==='occupied')adminClear(b.id)});log('CLEAR ALL requested')}
 function refreshState(){publish({action:'request_state'})}
 
-client.on('connect',()=>{document.getElementById('mqttStatus').textContent='Connected';document.getElementById('mqttStatus').classList.add('ok');client.subscribe(TOPIC+'/state');log('MQTT connected')});
-client.on('error',e=>log('MQTT error '+e.message));
+client.on('connect',()=>{document.getElementById('mqttStatus').textContent='Connected';document.getElementById('mqttStatus').classList.add('ok');client.subscribe(TOPIC+'/state',(err)=>{if(err){document.getElementById('mqttStatus').textContent='Subscribe error';log('MQTT subscribe error '+err.message);return;} log('MQTT connected to '+MQTT_URL); refreshState();})});
+client.on('reconnect',()=>{document.getElementById('mqttStatus').textContent='Reconnecting…';document.getElementById('mqttStatus').classList.remove('ok');log('MQTT reconnecting')});
+client.on('close',()=>{document.getElementById('mqttStatus').textContent='Disconnected';document.getElementById('mqttStatus').classList.remove('ok');log('MQTT connection closed')});
+client.on('offline',()=>{document.getElementById('mqttStatus').textContent='Offline';document.getElementById('mqttStatus').classList.remove('ok');log('MQTT offline')});
+client.on('error',e=>{document.getElementById('mqttStatus').textContent='MQTT error';document.getElementById('mqttStatus').classList.remove('ok');log('MQTT error '+(e&&e.message?e.message:String(e)))});
 client.on('message',(topic,payload)=>{
  try{
   const s=JSON.parse(payload.toString());

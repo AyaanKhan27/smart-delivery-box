@@ -1,9 +1,1 @@
-{
-  "name":"Smart Delivery Box V6",
-  "short_name":"Delivery Box",
-  "start_url":".",
-  "display":"standalone",
-  "background_color":"#f4f5f7",
-  "theme_color":"#111827",
-  "icons":[]
-}
+{"name":"Smart Delivery Box","short_name":"Delivery Box","start_url":"./","display":"standalone","background_color":"#f4f6f8","theme_color":"#111827","icons":[]}

@@ -7,84 +7,148 @@
 <link rel="manifest" href="manifest.webmanifest">
 <title>Smart Delivery Box</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:#101828;font-family:Inter,Arial,sans-serif}.wrap{max-width:1000px;margin:auto;padding:16px}.hero,.card{background:#fff;border-radius:18px;padding:20px;margin-bottom:14px;box-shadow:0 4px 18px rgba(16,24,40,.08)}h1{margin:0 0 6px;font-size:28px}h2{margin:0 0 8px}.sub,.muted{color:#667085}.status{display:inline-block;margin-top:10px;padding:7px 11px;border-radius:999px;font-weight:700;font-size:13px;background:#fff3cd;color:#8a5a00}.status.ok{background:#dcfce7;color:#166534}.status.err{background:#fee2e2;color:#991b1b}.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}.tab{border:0;border-radius:12px;padding:13px;background:#e4e7ec;font-weight:800;cursor:pointer}.tab.active{background:#111827;color:#fff}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.field{margin:12px 0}.field label{font-weight:700;font-size:14px;display:block}.field input,.field select{width:100%;padding:12px;border:1px solid #d0d5dd;border-radius:10px;font-size:15px;margin-top:6px}.btn{border:0;border-radius:11px;padding:12px 15px;font-weight:800;cursor:pointer}.primary{background:#111827;color:#fff}.secondary{background:#e8ebef;color:#111827}.danger{background:#fee2e2;color:#991b1b}.btn:disabled{opacity:.5;cursor:not-allowed}.bay{border:1px solid #d9dee7;border-left:6px solid #22c55e;border-radius:13px;padding:15px;margin:10px 0}.bay.occupied{border-left-color:#f59e0b}.pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef2f6;font-size:12px;font-weight:800}.otp{font-size:25px;font-weight:900;letter-spacing:3px}.notice{padding:12px;border-radius:10px;background:#f2f4f7;margin-top:12px}.success{background:#ecfdf3;color:#166534}.warning{background:#fffaeb;color:#92400e}.error{background:#fef3f2;color:#b42318}.log{background:#101828;color:#d0d5dd;border-radius:12px;padding:12px;min-height:90px;white-space:pre-wrap;font:12px ui-monospace,monospace}.hidden{display:none}.small{font-size:12px;line-height:1.45;color:#667085}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px;border-bottom:1px solid #eaecf0;font-size:13px}.kpi{font-size:22px;font-weight:900}@media(max-width:700px){.grid{grid-template-columns:1fr}.wrap{padding:10px}h1{font-size:24px}.tabs{grid-template-columns:1fr 1fr 1fr}.card{padding:16px}}
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111827;background:#f3f4f6}
+*{box-sizing:border-box}body{margin:0}.wrap{max-width:760px;margin:auto;padding:16px}
+.card{background:white;border-radius:18px;padding:18px;margin:12px 0;box-shadow:0 2px 12px #00000012}
+h1{font-size:24px;margin:0 0 4px}.muted{color:#6b7280;font-size:14px}
+.status{display:inline-block;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#fee2e2;color:#991b1b}
+.status.ok{background:#dcfce7;color:#166534}
+nav{display:flex;gap:8px;position:sticky;top:0;background:#f3f4f6;padding:8px 0;z-index:3}
+nav button{flex:1;border:0;border-radius:12px;padding:11px;background:#e5e7eb;font-weight:700}
+nav button.active{background:#111827;color:white}
+input,select,button{width:100%;font:inherit;padding:12px;border-radius:12px;border:1px solid #d1d5db;margin:5px 0}
+button.primary{background:#111827;color:#fff;border:0;font-weight:700}
+button.warn{background:#f59e0b;color:#111;border:0;font-weight:700}
+button.danger{background:#dc2626;color:#fff;border:0;font-weight:700}
+.bay{border:1px solid #e5e7eb;border-radius:14px;padding:13px;margin:9px 0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.hidden{display:none}.otp{font-size:26px;font-weight:800;letter-spacing:6px}.log{font-family:ui-monospace,monospace;font-size:12px;max-height:220px;overflow:auto;background:#111827;color:#d1fae5;border-radius:12px;padding:12px;white-space:pre-wrap}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="hero">
+  <div class="card">
     <h1>Smart Delivery Box</h1>
-    <div class="sub">Parcel-based temporary compartment allocation</div>
-    <div id="status" class="status">Connecting...</div>
-    <div id="lastSync" class="small"></div>
+    <div class="muted">Dynamic parcel-to-compartment allocation</div>
+    <div style="margin-top:10px">MQTT <span id="mqttStatus" class="status">Connecting…</span></div>
   </div>
 
-  <div class="tabs">
-    <button class="tab active" onclick="showTab('resident',this)">Resident</button>
-    <button class="tab" onclick="showTab('locker',this)">Locker</button>
-    <button class="tab" onclick="showTab('admin',this)">Admin</button>
-  </div>
+  <nav>
+    <button id="tabResident" onclick="show('resident')">Resident</button>
+    <button id="tabLocker" onclick="show('locker')">Locker</button>
+    <button id="tabAdmin" onclick="show('admin')">Admin</button>
+  </nav>
 
   <section id="resident">
     <div class="card">
       <h2>My Parcels</h2>
-      <div class="sub">Each delivered parcel receives its own temporary compartment and one-time OTP.</div>
-      <div id="residentList"><p class="muted">Loading...</p></div>
+      <div class="muted">Each parcel gets its own temporary compartment and one-time OTP.</div>
+      <div id="residentBays"></div>
     </div>
   </section>
 
   <section id="locker" class="hidden">
     <div class="card">
       <h2>Locker Touchscreen</h2>
-      <div class="sub">The courier identifies the parcel at the box. The system chooses the smallest suitable free compartment.</div>
-      <div class="field"><label>Parcel ID<input id="parcelId" placeholder="e.g. AMZ-10027" autocomplete="off"></label></div>
-      <div class="field"><label>Recipient<input id="recipient" placeholder="e.g. Ayaan Khan" autocomplete="off"></label></div>
-      <div class="field"><label>Parcel Size<select id="size"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></label></div>
-      <button id="deliverBtn" class="btn primary" onclick="deliverParcel()">DELIVER PARCEL</button>
-      <div id="lockerMsg"></div>
+      <div class="muted">Courier does not need our app. The locker reads the parcel identifier and assigns a free suitable bay.</div>
+      <input id="parcelId" placeholder="Parcel ID / barcode value">
+      <input id="recipient" placeholder="Recipient name">
+      <select id="size"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select>
+      <button class="primary" onclick="deliverParcel()">DELIVER PARCEL</button>
+      <div id="lockerMessage" class="muted"></div>
+      <div id="lockerBays"></div>
     </div>
-    <div class="card"><h2>Compartment Status</h2><div id="lockerBays"></div></div>
   </section>
 
   <section id="admin" class="hidden">
-    <div class="card"><h2>Admin / Security</h2><div id="adminBays"></div></div>
-    <div class="card"><h2>Audit Log</h2><div id="audit"></div></div>
+    <div class="card">
+      <h2>Admin / Audit</h2>
+      <div class="row">
+        <button onclick="refreshState()">Refresh</button>
+        <button class="danger" onclick="clearAll()">Clear all demo data</button>
+      </div>
+      <div id="adminBays"></div>
+      <h3>Event log</h3>
+      <div id="log" class="log"></div>
+    </div>
   </section>
-
-  <div class="card"><h2>System Log</h2><div id="log" class="log"></div></div>
 </div>
+
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script>
-const DB='https://smart-delivery-box-dd528-default-rtdb.firebaseio.com';
-const BAYS=[
-{id:'small1',name:'SMALL 1',rank:1},{id:'small2',name:'SMALL 2',rank:1},
-{id:'medium1',name:'MEDIUM 1',rank:2},{id:'medium2',name:'MEDIUM 2',rank:2},{id:'large1',name:'LARGE 1',rank:3}
+const TOPIC='sdb/demo/smart-delivery-box-ayaan-v2';
+const client=mqtt.connect('wss://broker.hivemq.com:8884/mqtt',{clientId:'sdb-web-'+Math.random().toString(16).slice(2),clean:true,reconnectPeriod:2000,connectTimeout:10000,keepalive:30});
+const bays=[
+ {id:1,name:'SMALL 1',size:'small',servo:4,led:2,state:'free'},
+ {id:2,name:'SMALL 2',size:'small',servo:5,led:19,state:'free'},
+ {id:3,name:'MEDIUM 1',size:'medium',servo:6,led:20,state:'free'},
+ {id:4,name:'MEDIUM 2',size:'medium',servo:7,led:40,state:'free'},
+ {id:5,name:'LARGE 1',size:'large',servo:8,led:41,state:'free'}
 ];
-const SIZE_RANK={small:1,medium:2,large:3};
-let state={bays:{},audit:{}}; let timer=null; let busy=false;
-const $=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
-function api(path){return DB+'/'+path.replace(/^\/+|\/+$/g,'')+'.json'}
-function log(s){$('log').textContent=new Date().toLocaleTimeString()+'  '+s+'\n'+$('log').textContent.slice(0,7000)}
-function status(t,c=''){$('status').textContent=t;$('status').className='status '+c}
-function showTab(id,btn){['resident','locker','admin'].forEach(x=>$(x).classList.toggle('hidden',x!==id));document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));btn.classList.add('active')}
-async function get(path){const r=await fetch(api(path)+'?t='+Date.now(),{cache:'no-store'});if(!r.ok)throw Error('GET '+r.status);return r.json()}
-async function put(path,data){const r=await fetch(api(path),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});if(!r.ok)throw Error('PUT '+r.status);return r.json()}
-function bayName(id){return (BAYS.find(x=>x.id===id)||{}).name||id}
-function normalizeState(s){s=s||{};s.bays=s.bays||{};for(const b of BAYS)if(!s.bays[b.id])s.bays[b.id]={name:b.name,occupied:false,parcelId:'',recipient:'',size:'',otp:'',deliveredAt:0,unlockUntil:0};return s}
-async function sync(){try{const s=normalizeState(await get('state'));state=s;status('HTTPS Connected','ok');$('lastSync').textContent='Last sync: '+new Date().toLocaleTimeString();renderAll()}catch(e){status('HTTPS retrying...');log('State read failed: '+e.message)}}
-function renderAll(){renderResident();renderLocker();renderAdmin()}
-function renderResident(){const entries=BAYS.map(x=>[x.id,state.bays[x.id]]).filter(([_,b])=>b&&b.occupied);if(!entries.length){$('residentList').innerHTML='<p class="muted">No parcels waiting.</p>';return}$('residentList').innerHTML=entries.map(([id,b])=>`<div class="bay occupied"><div class="kpi">${esc(b.name||bayName(id))}</div><p><b>Parcel:</b> ${esc(b.parcelId)}</p><p><b>Recipient:</b> ${esc(b.recipient)}</p><p><b>Size:</b> ${esc(b.size)}</p><p><b>One-time OTP:</b> <span class="otp">${esc(b.otp)}</span></p><button class="btn primary" onclick="collectParcel('${id}')">COLLECT PARCEL</button></div>`).join('')}
-function renderLocker(){ $('lockerBays').innerHTML=BAYS.map(x=>{const b=state.bays[x.id];return `<div class="bay ${b.occupied?'occupied':''}"><b>${x.name}</b> <span class="pill">${b.occupied?'OCCUPIED':'FREE'}</span>${b.occupied?`<div class="muted">${esc(b.parcelId)} · ${esc(b.recipient)} · ${esc(b.size)}</div>`:''}</div>`}).join('') }
-function renderAdmin(){const entries=BAYS.map(x=>[x.id,state.bays[x.id]]);$('adminBays').innerHTML=entries.map(([id,b])=>`<div class="bay ${b.occupied?'occupied':''}"><b>${esc(b.name||bayName(id))}</b> — ${b.occupied?'OCCUPIED':'FREE'}${b.occupied?`<div class="muted">${esc(b.parcelId)} · ${esc(b.recipient)} · ${esc(b.size)}</div><button class="btn secondary" onclick="adminUnlock('${id}')">UNLOCK</button> <button class="btn danger" onclick="clearBay('${id}')">CLEAR</button>`:''}</div>`).join('');const vals=Object.values(state.audit||{}).sort((a,b)=>(b.time||0)-(a.time||0)).slice(0,25);$('audit').innerHTML=vals.length?'<table><tr><th>Action</th><th>Parcel</th><th>Bay</th><th>Time</th></tr>'+vals.map(x=>`<tr><td>${esc(x.action)}</td><td>${esc(x.parcelId)}</td><td>${esc(x.bay)}</td><td>${x.time?new Date(x.time).toLocaleString():''}</td></tr>`).join('')+'</table>':'<p class="muted">No audit events.</p>'}
-function nextSuitable(size){const rank=SIZE_RANK[size];return BAYS.find(x=>!state.bays[x.id]?.occupied&&x.rank>=rank)?.id||null}
-async function command(cmd){if(busy)throw Error('Another locker operation is already being processed. Please wait a moment.');const existing=await get('commands/next');if(existing&&existing.id)throw Error('Locker is processing another command. Please wait.');const id='cmd-'+Date.now()+'-'+Math.random().toString(16).slice(2);busy=true;try{await put('commands/next',{id,...cmd,time:Date.now()});log('Command queued: '+cmd.action+' ['+id+']');return id}finally{busy=false}}
-async function deliverParcel(){const parcelId=$('parcelId').value.trim(),recipient=$('recipient').value.trim(),size=$('size').value;if(!parcelId||!recipient){$('lockerMsg').innerHTML='<div class="notice error">Enter Parcel ID and Recipient.</div>';return}const bay=nextSuitable(size);if(!bay){$('lockerMsg').innerHTML='<div class="notice warning">No suitable compartment available. Please contact security / use alternate delivery.</div>';return}const otp=String(Math.floor(1000+Math.random()*9000));$('deliverBtn').disabled=true;$('lockerMsg').innerHTML='<div class="notice">Sending delivery to locker...</div>';try{await command({action:'deliver',bay,parcelId,recipient,size,otp});$('lockerMsg').innerHTML=`<div class="notice success"><b>${bayName(bay)}</b> assigned.<br>Courier can place the parcel when the door opens.<br><b>Resident OTP: ${otp}</b><br><span class="small">Waiting for ESP32 confirmation...</span></div>`;$('parcelId').value='';$('recipient').value='';await waitForBay(bay,parcelId)}catch(e){$('lockerMsg').innerHTML='<div class="notice error">'+esc(e.message)+'</div>';log('Delivery failed: '+e.message)}finally{$('deliverBtn').disabled=false}}
-async function waitForBay(bay,parcelId){for(let i=0;i<12;i++){await new Promise(r=>setTimeout(r,700));await sync();const b=state.bays[bay];if(b?.occupied&&b.parcelId===parcelId){$('lockerMsg').innerHTML+=`<div class="notice success">✓ ESP32 confirmed ${bayName(bay)} occupied.</div>`;return}}$('lockerMsg').innerHTML+='<div class="notice warning">Command was sent, but ESP32 confirmation has not arrived yet. Check the locker.</div>'}
-async function collectParcel(bay){const b=state.bays[bay];if(!b?.occupied)return;const otp=prompt('Enter the one-time OTP for '+bayName(bay));if(otp===null)return;if(String(otp).trim()!==String(b.otp)){alert('Invalid OTP.');return}try{await command({action:'collect',bay,otp:String(otp).trim()});log('Collection queued for '+bay);$('residentList').innerHTML='<div class="notice">Collection command sent. Waiting for locker confirmation...</div>'}catch(e){alert(e.message)}}
-async function adminUnlock(bay){try{await command({action:'unlock',bay})}catch(e){alert(e.message)}}
-async function clearBay(bay){if(!confirm('Clear '+bayName(bay)+'?'))return;try{await command({action:'clear',bay})}catch(e){alert(e.message)}}
-async function start(){log('Starting Firebase HTTPS connection...');await sync();clearInterval(timer);timer=setInterval(sync,1000)}
-start();
+const sizeRank={small:1,medium:2,large:3};
+let audit=[];
+
+function show(tab){
+ ['resident','locker','admin'].forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==tab));
+ ['Resident','Locker','Admin'].forEach(x=>document.getElementById('tab'+x).classList.toggle('active',x.toLowerCase()===tab));
+ render();
+}
+function log(x){audit.unshift(new Date().toLocaleTimeString()+'  '+x);audit=audit.slice(0,100);document.getElementById('log').textContent=audit.join('\n')}
+function publish(obj){client.publish(TOPIC+'/cmd',JSON.stringify(obj));log('CMD '+JSON.stringify(obj))}
+function render(){
+ const occ=bays.filter(b=>b.state==='occupied');
+ document.getElementById('residentBays').innerHTML=occ.length?occ.map(b=>`
+ <div class="bay"><b>${b.name}</b><br>Parcel: ${b.parcel||'—'}<br>Recipient: ${b.recipient||'—'}<br>
+ <span class="otp">${b.otp||'----'}</span>
+ <input id="otp-${b.id}" inputmode="numeric" maxlength="4" placeholder="Enter OTP">
+ <button class="primary" onclick="collect(${b.id})">UNLOCK & COLLECT</button></div>`).join(''):'<p class="muted">No parcels waiting.</p>';
+
+ document.getElementById('lockerBays').innerHTML=bays.map(b=>`
+ <div class="bay"><b>${b.name}</b> · ${b.size} · ${b.state.toUpperCase()} · Servo ${b.servo ?? '—'}°<br>
+ ${b.parcel?`Parcel: ${b.parcel} · ${b.recipient||''}`:''}
+ </div>`).join('');
+
+ document.getElementById('adminBays').innerHTML=bays.map(b=>`
+ <div class="bay"><b>${b.name}</b> — ${b.state}<br>${b.parcel||''} ${b.recipient||''}
+ <div class="row"><button onclick="adminUnlock(${b.id})">Unlock</button><button onclick="adminClear(${b.id})">Clear</button></div></div>`).join('');
+}
+function deliverParcel(){
+ const parcel=document.getElementById('parcelId').value.trim();
+ const recipient=document.getElementById('recipient').value.trim();
+ const size=document.getElementById('size').value;
+ if(!parcel||!recipient){document.getElementById('lockerMessage').textContent='Enter parcel ID and recipient.';return}
+ // Allocation: smallest free compartment that can hold the parcel.
+ const candidates=bays.filter(b=>b.state==='free' && sizeRank[b.size]>=sizeRank[size]).sort((a,b)=>sizeRank[a.size]-sizeRank[b.size]);
+ if(!candidates.length){document.getElementById('lockerMessage').textContent='No suitable compartment available. Please contact security / use alternate delivery.';return}
+ const b=candidates[0];
+ const otp=String(Math.floor(1000+Math.random()*9000));
+ publish({action:'deliver',compartment:b.id,parcel,recipient,otp,size});
+ document.getElementById('lockerMessage').textContent=`Assigned ${b.name}. Courier can place the parcel when the door opens.`;
+}
+function collect(id){
+ const b=bays.find(x=>x.id===id);const code=document.getElementById('otp-'+id).value.trim();
+ if(!b||b.state!=='occupied'){return}
+ if(code!==b.otp){alert('Invalid OTP for this parcel.');return}
+ publish({action:'collect',compartment:id,otp:code,role:'resident'});
+}
+function adminUnlock(id){publish({action:'unlock',compartment:id,role:'admin'})}
+function adminClear(id){publish({action:'clear',compartment:id,role:'admin'})}
+function clearAll(){bays.forEach(b=>{if(b.state==='occupied')adminClear(b.id)});log('CLEAR ALL requested')}
+function refreshState(){publish({action:'request_state'})}
+
+client.on('connect',()=>{document.getElementById('mqttStatus').textContent='Connected';document.getElementById('mqttStatus').classList.add('ok');client.subscribe(TOPIC+'/state',{qos:1},()=>{log('MQTT connected');publish({action:'request_state',compartment:1})})});
+client.on('error',e=>log('MQTT error '+e.message));
+client.on('message',(topic,payload)=>{
+ try{
+  const s=JSON.parse(payload.toString());
+  const b=bays.find(x=>x.id===Number(s.compartment));
+  if(!b)return;
+  Object.assign(b,s);
+  log('STATE '+JSON.stringify(s));
+  render();
+ }catch(e){log('Bad state '+e.message)}
+});
+show('resident');
 </script>
 </body>
 </html>

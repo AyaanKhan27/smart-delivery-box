@@ -93,7 +93,7 @@ const BAYS=[
   {id:"large1",name:"LARGE 1",rank:3}
 ];
 const SIZE_RANK={small:1,medium:2,large:3};
-let DB=(localStorage.getItem("sdbFirebaseUrl")||"").replace(/\/+$/,"");
+let DB=(localStorage.getItem("sdbFirebaseUrl")||"https://smart-delivery-box-dd528-default-rtdb.firebaseio.com").replace(/\/+$/,"");
 let state=null;
 let pollTimer=null;
 const $=id=>document.getElementById(id);

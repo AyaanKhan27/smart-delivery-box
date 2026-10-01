@@ -1,5 +1,5 @@
 {
-  "name":"Smart Delivery Box",
+  "name":"Smart Delivery Box v3",
   "short_name":"Smart Locker",
   "start_url":"./?role=resident",
   "display":"standalone",

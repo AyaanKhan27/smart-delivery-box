@@ -1,121 +1,228 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Smart Delivery Box — MQTT Diagnostic V5</title>
+<meta name="theme-color" content="#111827">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Smart Delivery Box</title>
 <style>
-body{font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:24px;background:#f5f5f5;color:#111}
-.card{background:white;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 2px 10px #0001}
-h1{font-size:22px;margin-top:0}
-.row{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid #eee}
-.row:last-child{border-bottom:0}
-.status{font-weight:700}
-.pass{color:#16833b}.fail{color:#c62828}.wait{color:#b26a00}
-button{width:100%;padding:14px;border:0;border-radius:10px;background:#111;color:white;font-size:16px}
-small{color:#666;line-height:1.5}
-#log{font-family:monospace;font-size:12px;white-space:pre-wrap;background:#111;color:#eee;padding:14px;border-radius:10px;min-height:100px}
+*{box-sizing:border-box}body{margin:0;background:#f4f5f7;font-family:Arial,sans-serif;color:#0b1730}
+.wrap{max-width:960px;margin:auto;padding:24px}.hero,.card{background:#fff;border-radius:22px;box-shadow:0 5px 20px #00000010;padding:24px;margin-bottom:18px}
+h1{margin:0 0 8px;font-size:30px}h2{margin-top:0}.sub{color:#617087}.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px}
+.tab{border:0;border-radius:14px;padding:16px;font-weight:700;font-size:16px;background:#e4e6eb;cursor:pointer}.tab.active{background:#111827;color:#fff}
+.status{display:inline-block;padding:7px 12px;border-radius:999px;font-weight:700;font-size:13px;margin-top:12px;background:#fde2e2;color:#b42318}.status.ok{background:#dcfce7;color:#166534}.status.warn{background:#fff3cd;color:#8a5a00}
+input,select{width:100%;padding:13px;border:1px solid #cfd5dd;border-radius:10px;margin-top:6px;font-size:15px;background:#fff}
+label{display:block;font-weight:700;margin-top:12px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.btn{border:0;border-radius:11px;padding:13px 16px;font-weight:700;cursor:pointer;margin-top:14px}.primary{background:#111827;color:white}.secondary{background:#e8ebef;color:#111827}.danger{background:#fee2e2;color:#991b1b}
+.bay{border:1px solid #d9dde3;border-radius:14px;padding:16px;margin:10px 0}.free{border-left:6px solid #22c55e}.occupied{border-left:6px solid #f59e0b}
+.kpi{font-size:24px;font-weight:800}.muted{color:#667085;font-size:14px}.hidden{display:none}.log{background:#111827;color:#e5e7eb;padding:14px;border-radius:12px;font-family:monospace;font-size:12px;white-space:pre-wrap;min-height:80px}
+.config{background:#fff8e1;border:1px solid #f0d98a}.small{font-size:12px;color:#667085;line-height:1.5}
+table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px solid #eee;text-align:left;font-size:13px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}.tabs{grid-template-columns:1fr 1fr 1fr}.wrap{padding:12px}h1{font-size:25px}}
 </style>
 </head>
 <body>
-<div class="card">
-<h1>Smart Delivery Box — Connection Diagnostic V5</h1>
-<small>This page does not change your ESP32 or circuit. It only tests the browser connection.</small>
+<div class="wrap">
+  <div class="hero">
+    <h1>Smart Delivery Box</h1>
+    <div class="sub">Dynamic parcel-to-compartment allocation</div>
+    <div id="status" class="status">HTTPS connecting...</div>
+  </div>
+
+  <div class="card config">
+    <h2>One-time connection setup</h2>
+    <div class="small">Enter your Firebase Realtime Database URL once. Example: https://your-project-default-rtdb.firebaseio.com or https://your-project-default-rtdb.asia-southeast1.firebasedatabase.app</div>
+    <label>Firebase Database URL
+      <input id="dbUrl" placeholder="https://your-project-default-rtdb.firebaseio.com">
+    </label>
+    <button class="btn primary" onclick="saveConfig()">Save & Test Connection</button>
+    <div id="configMsg" class="small"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('resident',this)">Resident</button>
+    <button class="tab" onclick="showTab('locker',this)">Locker</button>
+    <button class="tab" onclick="showTab('admin',this)">Admin</button>
+  </div>
+
+  <section id="resident">
+    <div class="card">
+      <h2>My Parcels</h2>
+      <div class="sub">Each parcel gets its own temporary compartment and one-time OTP.</div>
+      <div id="residentList"></div>
+    </div>
+  </section>
+
+  <section id="locker" class="hidden">
+    <div class="card">
+      <h2>Locker Touchscreen</h2>
+      <div class="sub">Courier identifies the parcel at the box. The system automatically chooses the smallest suitable free compartment.</div>
+      <label>Parcel ID<input id="parcelId" placeholder="e.g. AMZ-10027"></label>
+      <label>Recipient<input id="recipient" placeholder="e.g. Ayaan Khan"></label>
+      <label>Parcel Size
+        <select id="size"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select>
+      </label>
+      <button class="btn primary" onclick="deliverParcel()">DELIVER PARCEL</button>
+      <div id="lockerMsg"></div>
+    </div>
+  </section>
+
+  <section id="admin" class="hidden">
+    <div class="card">
+      <h2>Admin / Security</h2>
+      <div id="adminBays"></div>
+    </div>
+    <div class="card">
+      <h2>Audit Log</h2>
+      <div id="audit"></div>
+    </div>
+  </section>
+
+  <div class="card">
+    <h2>Connection Log</h2>
+    <div id="log" class="log"></div>
+  </div>
 </div>
 
-<div class="card">
-<div class="row"><span>1. Internet</span><span id="internet" class="status wait">TESTING...</span></div>
-<div class="row"><span>2. Secure WebSocket</span><span id="ws" class="status wait">TESTING...</span></div>
-<div class="row"><span>3. MQTT WebSocket</span><span id="mqtt" class="status wait">TESTING...</span></div>
-<div class="row"><span>4. Broker response</span><span id="broker" class="status wait">WAITING...</span></div>
-</div>
-
-<div class="card">
-<button onclick="runTests()">Run Diagnostic Again</button>
-</div>
-
-<div class="card">
-<strong>Technical log</strong>
-<div id="log"></div>
-</div>
-
-<script src="https://unpkg.com/mqtt@5.14.1/dist/mqtt.min.js"></script>
 <script>
-const el=id=>document.getElementById(id);
-const logEl=el('log');
-function log(s){logEl.textContent += new Date().toLocaleTimeString()+"  "+s+"\\n";}
+const BAYS=[
+  {id:"small1",name:"SMALL 1",rank:1},
+  {id:"small2",name:"SMALL 2",rank:1},
+  {id:"medium1",name:"MEDIUM 1",rank:2},
+  {id:"medium2",name:"MEDIUM 2",rank:2},
+  {id:"large1",name:"LARGE 1",rank:3}
+];
+const SIZE_RANK={small:1,medium:2,large:3};
+let DB=(localStorage.getItem("sdbFirebaseUrl")||"").replace(/\/+$/,"");
+let state=null;
+let pollTimer=null;
+const $=id=>document.getElementById(id);
 
-function setStatus(id,text,cls){
-  const e=el(id); e.textContent=text; e.className="status "+cls;
+function log(s){$("log").textContent=(new Date().toLocaleTimeString())+"  "+s+"\n"+$("log").textContent.slice(0,7000)}
+function setStatus(t,cls=""){$("status").textContent=t;$("status").className="status "+cls}
+function url(path){return DB+"/"+path.replace(/^\/+/,"")+".json"}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+
+function showTab(id,btn){
+  ["resident","locker","admin"].forEach(x=>$(x).classList.toggle("hidden",x!==id));
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active")); btn.classList.add("active");
 }
-
-async function internetTest(){
+function saveConfig(){
+  const v=$("dbUrl").value.trim().replace(/\/+$/,"");
+  if(!/^https:\/\/.+/.test(v)){ $("configMsg").textContent="Enter a valid HTTPS Firebase database URL."; return; }
+  DB=v; localStorage.setItem("sdbFirebaseUrl",DB); $("configMsg").textContent="Saved. Testing...";
+  start();
+}
+async function get(path){
+  const r=await fetch(url(path)+"?x="+Date.now(),{cache:"no-store"});
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return r.json();
+}
+async function put(path,data){
+  const r=await fetch(url(path),{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return r.json();
+}
+async function patch(path,data){
+  const r=await fetch(url(path),{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return r.json();
+}
+function initialState(){
+  const bays={}; BAYS.forEach(x=>bays[x.id]={name:x.name,occupied:false,parcelId:"",recipient:"",size:"",otp:"",deliveredAt:0,unlockUntil:0});
+  return {bays,lastCommandId:"",lastAction:"",updatedAt:Date.now()};
+}
+async function start(){
+  if(!DB){setStatus("Waiting for Firebase URL","warn");return}
+  clearInterval(pollTimer);
   try{
-    await fetch("https://www.google.com/generate_204",{mode:"no-cors",cache:"no-store"});
-    setStatus("internet","PASS","pass"); log("Internet request completed.");
-    return true;
+    let s=await get("state");
+    if(!s){s=initialState();await put("state",s);await put("commands/next",{});await put("audit",{});}
+    state=s; setStatus("HTTPS Connected","ok"); $("configMsg").textContent="Connection successful.";
+    log("Firebase HTTPS connection OK.");
+    renderAll();
+    pollTimer=setInterval(sync,1500);
   }catch(e){
-    setStatus("internet","FAIL","fail"); log("Internet FAIL: "+e.message);
-    return false;
+    setStatus("HTTPS disconnected",""); $("configMsg").textContent="Connection failed: "+e.message; log("Firebase error: "+e.message);
   }
 }
-
-function websocketTest(){
- return new Promise(resolve=>{
-   let done=false;
-   const finish=(ok,msg)=>{
-     if(done)return; done=true;
-     try{ws.close()}catch(_){}
-     setStatus("ws",ok?"PASS":"FAIL",ok?"pass":"fail");
-     log("WebSocket "+(ok?"PASS: ":"FAIL: ")+msg);
-     resolve(ok);
-   };
-   const ws=new WebSocket("wss://echo.websocket.events/");
-   const timer=setTimeout(()=>finish(false,"connection timeout"),8000);
-   ws.onopen=()=>{clearTimeout(timer); try{ws.send("SDB-V5-TEST")}catch(_){} finish(true,"connection opened");};
-   ws.onerror=()=>{clearTimeout(timer); finish(false,"browser reported WebSocket error");};
-   ws.onclose=()=>{if(!done){clearTimeout(timer);finish(false,"closed before opening");}};
- });
+async function sync(){
+  if(!DB)return;
+  try{
+    const s=await get("state"); if(s){state=s;renderAll()}
+  }catch(e){setStatus("HTTPS retrying...","warn");log("Read retry: "+e.message)}
 }
-
-function mqttTest(){
- return new Promise(resolve=>{
-   setStatus("mqtt","TESTING...","wait");
-   setStatus("broker","WAITING...","wait");
-   log("Connecting to mqtt.eclipseprojects.io:443 over WSS...");
-   let settled=false;
-   const finish=(ok,msg)=>{
-     if(settled)return; settled=true;
-     setStatus("mqtt",ok?"PASS":"FAIL",ok?"pass":"fail");
-     setStatus("broker",ok?"REACHED":"NOT REACHED",ok?"pass":"fail");
-     log("MQTT "+(ok?"PASS: ":"FAIL: ")+msg);
-     try{client.end(true)}catch(_){}
-     resolve(ok);
-   };
-   const client=mqtt.connect("wss://mqtt.eclipseprojects.io:443/mqtt",{
-     clientId:"sdb-v5-"+Math.random().toString(16).slice(2),
-     clean:true,connectTimeout:8000,reconnectPeriod:0,
-     keepalive:20
-   });
-   const timer=setTimeout(()=>finish(false,"MQTT connection timeout"),10000);
-   client.on("connect",()=>{clearTimeout(timer);finish(true,"MQTT connection established");});
-   client.on("error",err=>{clearTimeout(timer);finish(false,(err&&err.message)||"MQTT error");});
-   client.on("close",()=>{if(!settled){clearTimeout(timer);finish(false,"MQTT socket closed before connect");}});
- });
+function renderAll(){
+  renderResident();renderAdmin();
 }
-
-async function runTests(){
- logEl.textContent="";
- setStatus("internet","TESTING...","wait");
- setStatus("ws","TESTING...","wait");
- setStatus("mqtt","WAITING...","wait");
- setStatus("broker","WAITING...","wait");
- await internetTest();
- await websocketTest();
- await mqttTest();
- log("Diagnostic complete.");
+function renderResident(){
+  const list=Object.entries(state?.bays||{}).filter(([_,b])=>b.occupied);
+  if(!list.length){$("residentList").innerHTML='<p class="muted">No parcels waiting.</p>';return}
+  $("residentList").innerHTML=list.map(([bay,b])=>`
+    <div class="bay occupied">
+      <div class="kpi">${esc(b.name||bayName(bay))}</div>
+      <p><b>Parcel:</b> ${esc(b.parcelId)}</p>
+      <p><b>Recipient:</b> ${esc(b.recipient)}</p>
+      <p><b>Size:</b> ${esc(b.size)}</p>
+      <p><b>One-time OTP:</b> <span class="kpi">${esc(b.otp)}</span></p>
+      <button class="btn primary" onclick="collectParcel('${esc(bay)}')">COLLECT PARCEL</button>
+    </div>`).join("");
 }
-runTests();
+function bayName(id){return (BAYS.find(x=>x.id===id)||{}).name||id}
+function renderAdmin(){
+  $("adminBays").innerHTML=Object.entries(state?.bays||{}).map(([bay,b])=>`
+    <div class="bay ${b.occupied?"occupied":"free"}">
+      <b>${esc(b.name||bayName(bay))}</b> — ${b.occupied?"OCCUPIED":"FREE"}
+      ${b.occupied?`<div class="muted">Parcel ${esc(b.parcelId)} • ${esc(b.recipient)} • ${esc(b.size)}</div>`:""}
+      ${b.occupied?`<button class="btn secondary" onclick="adminUnlock('${esc(bay)}')">UNLOCK</button>
+      <button class="btn danger" onclick="clearBay('${esc(bay)}')">CLEAR</button>`:""}
+    </div>`).join("");
+  const a=state?.audit||{};
+  const entries=Object.values(a).sort((x,y)=>(y.time||0)-(x.time||0)).slice(0,20);
+  $("audit").innerHTML=entries.length?`<table><tr><th>Action</th><th>Parcel</th><th>Bay</th><th>Time</th></tr>`+
+    entries.map(x=>`<tr><td>${esc(x.action)}</td><td>${esc(x.parcelId)}</td><td>${esc(x.bay)}</td><td>${new Date(x.time).toLocaleString()}</td></tr>`).join("")+"</table>"
+    :'<p class="muted">No audit events.</p>';
+}
+function nextSuitable(size){
+  const rank=SIZE_RANK[size];
+  for(const x of BAYS){
+    const b=state.bays[x.id];
+    if(!b?.occupied && x.rank>=rank)return x.id;
+  }
+  return null;
+}
+async function sendCommand(cmd){
+  const id="cmd-"+Date.now()+"-"+Math.random().toString(16).slice(2);
+  await put("commands/next",{id,...cmd,time:Date.now()});
+  return id;
+}
+async function deliverParcel(){
+  if(!DB||!state){alert("Connect Firebase first.");return}
+  const parcelId=$("parcelId").value.trim(), recipient=$("recipient").value.trim(), size=$("size").value;
+  if(!parcelId||!recipient){alert("Enter Parcel ID and Recipient.");return}
+  const bay=nextSuitable(size);
+  if(!bay){$("lockerMsg").innerHTML='<p class="muted">No suitable compartment available. Please contact security / use alternate delivery.</p>';return}
+  const otp=String(Math.floor(1000+Math.random()*9000));
+  try{
+    await sendCommand({action:"deliver",bay,parcelId,recipient,size,otp});
+    $("lockerMsg").innerHTML=`<p><b>Assigned:</b> ${esc(bayName(bay))}<br>Courier places the parcel in the compartment.<br><b>Resident OTP:</b> ${otp}</p>`;
+    $("parcelId").value="";$("recipient").value="";
+  }catch(e){alert("Delivery command failed: "+e.message)}
+}
+async function collectParcel(bay){
+  const otp=prompt("Enter the one-time OTP for "+bayName(bay));
+  if(!otp)return;
+  const b=state.bays[bay];
+  if(!b||!b.occupied){alert("No active parcel.");return}
+  if(String(otp).trim()!==String(b.otp)){alert("Invalid OTP.");return}
+  try{await sendCommand({action:"collect",bay,otp:String(otp).trim()});log("Collection command sent for "+bay)}
+  catch(e){alert("Collection command failed: "+e.message)}
+}
+async function adminUnlock(bay){try{await sendCommand({action:"unlock",bay})}catch(e){alert(e.message)}}
+async function clearBay(bay){if(confirm("Clear "+bay+"?"))try{await sendCommand({action:"clear",bay})}catch(e){alert(e.message)}}
+
+$("dbUrl").value=DB;
+start();
 </script>
 </body>
 </html>

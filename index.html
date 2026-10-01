@@ -1,158 +1,121 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#111827">
-<link rel="manifest" href="manifest.webmanifest">
-<title>Smart Delivery Box</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart Delivery Box — MQTT Diagnostic V5</title>
 <style>
-:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111827;background:#f3f4f6}
-*{box-sizing:border-box}body{margin:0}.wrap{max-width:760px;margin:auto;padding:16px}
-.card{background:white;border-radius:18px;padding:18px;margin:12px 0;box-shadow:0 2px 12px #00000012}
-h1{font-size:24px;margin:0 0 4px}.muted{color:#6b7280;font-size:14px}
-.status{display:inline-block;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#fee2e2;color:#991b1b}
-.status.ok{background:#dcfce7;color:#166534}
-nav{display:flex;gap:8px;position:sticky;top:0;background:#f3f4f6;padding:8px 0;z-index:3}
-nav button{flex:1;border:0;border-radius:12px;padding:11px;background:#e5e7eb;font-weight:700}
-nav button.active{background:#111827;color:white}
-input,select,button{width:100%;font:inherit;padding:12px;border-radius:12px;border:1px solid #d1d5db;margin:5px 0}
-button.primary{background:#111827;color:#fff;border:0;font-weight:700}
-button.warn{background:#f59e0b;color:#111;border:0;font-weight:700}
-button.danger{background:#dc2626;color:#fff;border:0;font-weight:700}
-.bay{border:1px solid #e5e7eb;border-radius:14px;padding:13px;margin:9px 0}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.hidden{display:none}.otp{font-size:26px;font-weight:800;letter-spacing:6px}.log{font-family:ui-monospace,monospace;font-size:12px;max-height:220px;overflow:auto;background:#111827;color:#d1fae5;border-radius:12px;padding:12px;white-space:pre-wrap}
+body{font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:24px;background:#f5f5f5;color:#111}
+.card{background:white;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 2px 10px #0001}
+h1{font-size:22px;margin-top:0}
+.row{display:flex;justify-content:space-between;align-items:center;padding:14px 0;border-bottom:1px solid #eee}
+.row:last-child{border-bottom:0}
+.status{font-weight:700}
+.pass{color:#16833b}.fail{color:#c62828}.wait{color:#b26a00}
+button{width:100%;padding:14px;border:0;border-radius:10px;background:#111;color:white;font-size:16px}
+small{color:#666;line-height:1.5}
+#log{font-family:monospace;font-size:12px;white-space:pre-wrap;background:#111;color:#eee;padding:14px;border-radius:10px;min-height:100px}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="card">
-    <h1>Smart Delivery Box</h1>
-    <div class="muted">Dynamic parcel-to-compartment allocation</div>
-    <div style="margin-top:10px">MQTT <span id="mqttStatus" class="status">Connecting…</span></div>
-  </div>
-
-  <nav>
-    <button id="tabResident" onclick="show('resident')">Resident</button>
-    <button id="tabLocker" onclick="show('locker')">Locker</button>
-    <button id="tabAdmin" onclick="show('admin')">Admin</button>
-  </nav>
-
-  <section id="resident">
-    <div class="card">
-      <h2>My Parcels</h2>
-      <div class="muted">Each parcel gets its own temporary compartment and one-time OTP.</div>
-      <div id="residentBays"></div>
-    </div>
-  </section>
-
-  <section id="locker" class="hidden">
-    <div class="card">
-      <h2>Locker Touchscreen</h2>
-      <div class="muted">Courier does not need our app. The locker reads the parcel identifier and assigns a free suitable bay.</div>
-      <input id="parcelId" placeholder="Parcel ID / barcode value">
-      <input id="recipient" placeholder="Recipient name">
-      <select id="size"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select>
-      <button class="primary" onclick="deliverParcel()">DELIVER PARCEL</button>
-      <div id="lockerMessage" class="muted"></div>
-      <div id="lockerBays"></div>
-    </div>
-  </section>
-
-  <section id="admin" class="hidden">
-    <div class="card">
-      <h2>Admin / Audit</h2>
-      <div class="row">
-        <button onclick="refreshState()">Refresh</button>
-        <button class="danger" onclick="clearAll()">Clear all demo data</button>
-      </div>
-      <div id="adminBays"></div>
-      <h3>Event log</h3>
-      <div id="log" class="log"></div>
-    </div>
-  </section>
+<div class="card">
+<h1>Smart Delivery Box — Connection Diagnostic V5</h1>
+<small>This page does not change your ESP32 or circuit. It only tests the browser connection.</small>
 </div>
 
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<div class="card">
+<div class="row"><span>1. Internet</span><span id="internet" class="status wait">TESTING...</span></div>
+<div class="row"><span>2. Secure WebSocket</span><span id="ws" class="status wait">TESTING...</span></div>
+<div class="row"><span>3. MQTT WebSocket</span><span id="mqtt" class="status wait">TESTING...</span></div>
+<div class="row"><span>4. Broker response</span><span id="broker" class="status wait">WAITING...</span></div>
+</div>
+
+<div class="card">
+<button onclick="runTests()">Run Diagnostic Again</button>
+</div>
+
+<div class="card">
+<strong>Technical log</strong>
+<div id="log"></div>
+</div>
+
+<script src="https://unpkg.com/mqtt@5.14.1/dist/mqtt.min.js"></script>
 <script>
-const TOPIC='sdb/demo/smart-delivery-box-ayaan-v4';
-const MQTT_URL='wss://mqtt.eclipseprojects.io:443/mqtt';
-const client=mqtt.connect(MQTT_URL,{clientId:'sdb-web-'+Math.random().toString(16).slice(2),clean:true,keepalive:30,connectTimeout:10000,reconnectPeriod:3000,resubscribe:true});
-const bays=[
- {id:1,name:'SMALL 1',size:'small',servo:4,led:2,state:'free'},
- {id:2,name:'SMALL 2',size:'small',servo:5,led:19,state:'free'},
- {id:3,name:'MEDIUM 1',size:'medium',servo:6,led:20,state:'free'},
- {id:4,name:'MEDIUM 2',size:'medium',servo:7,led:40,state:'free'},
- {id:5,name:'LARGE 1',size:'large',servo:8,led:41,state:'free'}
-];
-const sizeRank={small:1,medium:2,large:3};
-let audit=[];
+const el=id=>document.getElementById(id);
+const logEl=el('log');
+function log(s){logEl.textContent += new Date().toLocaleTimeString()+"  "+s+"\\n";}
 
-function show(tab){
- ['resident','locker','admin'].forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==tab));
- ['Resident','Locker','Admin'].forEach(x=>document.getElementById('tab'+x).classList.toggle('active',x.toLowerCase()===tab));
- render();
+function setStatus(id,text,cls){
+  const e=el(id); e.textContent=text; e.className="status "+cls;
 }
-function log(x){audit.unshift(new Date().toLocaleTimeString()+'  '+x);audit=audit.slice(0,100);document.getElementById('log').textContent=audit.join('\n')}
-function publish(obj){client.publish(TOPIC+'/cmd',JSON.stringify(obj));log('CMD '+JSON.stringify(obj))}
-function render(){
- const occ=bays.filter(b=>b.state==='occupied');
- document.getElementById('residentBays').innerHTML=occ.length?occ.map(b=>`
- <div class="bay"><b>${b.name}</b><br>Parcel: ${b.parcel||'—'}<br>Recipient: ${b.recipient||'—'}<br>
- <span class="otp">${b.otp||'----'}</span>
- <input id="otp-${b.id}" inputmode="numeric" maxlength="4" placeholder="Enter OTP">
- <button class="primary" onclick="collect(${b.id})">UNLOCK & COLLECT</button></div>`).join(''):'<p class="muted">No parcels waiting.</p>';
 
- document.getElementById('lockerBays').innerHTML=bays.map(b=>`
- <div class="bay"><b>${b.name}</b> · ${b.size} · ${b.state.toUpperCase()}<br>
- ${b.parcel?`Parcel: ${b.parcel} · ${b.recipient||''}`:''}
- </div>`).join('');
+async function internetTest(){
+  try{
+    await fetch("https://www.google.com/generate_204",{mode:"no-cors",cache:"no-store"});
+    setStatus("internet","PASS","pass"); log("Internet request completed.");
+    return true;
+  }catch(e){
+    setStatus("internet","FAIL","fail"); log("Internet FAIL: "+e.message);
+    return false;
+  }
+}
 
- document.getElementById('adminBays').innerHTML=bays.map(b=>`
- <div class="bay"><b>${b.name}</b> — ${b.state}<br>${b.parcel||''} ${b.recipient||''}
- <div class="row"><button onclick="adminUnlock(${b.id})">Unlock</button><button onclick="adminClear(${b.id})">Clear</button></div></div>`).join('');
+function websocketTest(){
+ return new Promise(resolve=>{
+   let done=false;
+   const finish=(ok,msg)=>{
+     if(done)return; done=true;
+     try{ws.close()}catch(_){}
+     setStatus("ws",ok?"PASS":"FAIL",ok?"pass":"fail");
+     log("WebSocket "+(ok?"PASS: ":"FAIL: ")+msg);
+     resolve(ok);
+   };
+   const ws=new WebSocket("wss://echo.websocket.events/");
+   const timer=setTimeout(()=>finish(false,"connection timeout"),8000);
+   ws.onopen=()=>{clearTimeout(timer); try{ws.send("SDB-V5-TEST")}catch(_){} finish(true,"connection opened");};
+   ws.onerror=()=>{clearTimeout(timer); finish(false,"browser reported WebSocket error");};
+   ws.onclose=()=>{if(!done){clearTimeout(timer);finish(false,"closed before opening");}};
+ });
 }
-function deliverParcel(){
- const parcel=document.getElementById('parcelId').value.trim();
- const recipient=document.getElementById('recipient').value.trim();
- const size=document.getElementById('size').value;
- if(!parcel||!recipient){document.getElementById('lockerMessage').textContent='Enter parcel ID and recipient.';return}
- // Allocation: smallest free compartment that can hold the parcel.
- const candidates=bays.filter(b=>b.state==='free' && sizeRank[b.size]>=sizeRank[size]).sort((a,b)=>sizeRank[a.size]-sizeRank[b.size]);
- if(!candidates.length){document.getElementById('lockerMessage').textContent='No suitable compartment available. Please contact security / use alternate delivery.';return}
- const b=candidates[0];
- const otp=String(Math.floor(1000+Math.random()*9000));
- publish({action:'deliver',compartment:b.id,parcel,recipient,otp,size});
- document.getElementById('lockerMessage').textContent=`Assigned ${b.name}. Courier can place the parcel when the door opens.`;
-}
-function collect(id){
- const b=bays.find(x=>x.id===id);const code=document.getElementById('otp-'+id).value.trim();
- if(!b||b.state!=='occupied'){return}
- if(code!==b.otp){alert('Invalid OTP for this parcel.');return}
- publish({action:'collect',compartment:id,otp:code,role:'resident'});
-}
-function adminUnlock(id){publish({action:'unlock',compartment:id,role:'admin'})}
-function adminClear(id){publish({action:'clear',compartment:id,role:'admin'})}
-function clearAll(){bays.forEach(b=>{if(b.state==='occupied')adminClear(b.id)});log('CLEAR ALL requested')}
-function refreshState(){publish({action:'request_state'})}
 
-client.on('connect',()=>{document.getElementById('mqttStatus').textContent='Connected';document.getElementById('mqttStatus').classList.add('ok');client.subscribe(TOPIC+'/state',(err)=>{if(err){document.getElementById('mqttStatus').textContent='Subscribe error';log('MQTT subscribe error '+err.message);return;} log('MQTT connected to '+MQTT_URL); refreshState();})});
-client.on('reconnect',()=>{document.getElementById('mqttStatus').textContent='Reconnecting…';document.getElementById('mqttStatus').classList.remove('ok');log('MQTT reconnecting')});
-client.on('close',()=>{document.getElementById('mqttStatus').textContent='Disconnected';document.getElementById('mqttStatus').classList.remove('ok');log('MQTT connection closed')});
-client.on('offline',()=>{document.getElementById('mqttStatus').textContent='Offline';document.getElementById('mqttStatus').classList.remove('ok');log('MQTT offline')});
-client.on('error',e=>{document.getElementById('mqttStatus').textContent='MQTT error';document.getElementById('mqttStatus').classList.remove('ok');log('MQTT error '+(e&&e.message?e.message:String(e)))});
-client.on('message',(topic,payload)=>{
- try{
-  const s=JSON.parse(payload.toString());
-  const b=bays.find(x=>x.id===Number(s.compartment));
-  if(!b)return;
-  Object.assign(b,s);
-  log('STATE '+JSON.stringify(s));
-  render();
- }catch(e){log('Bad state '+e.message)}
-});
-show('resident');
+function mqttTest(){
+ return new Promise(resolve=>{
+   setStatus("mqtt","TESTING...","wait");
+   setStatus("broker","WAITING...","wait");
+   log("Connecting to mqtt.eclipseprojects.io:443 over WSS...");
+   let settled=false;
+   const finish=(ok,msg)=>{
+     if(settled)return; settled=true;
+     setStatus("mqtt",ok?"PASS":"FAIL",ok?"pass":"fail");
+     setStatus("broker",ok?"REACHED":"NOT REACHED",ok?"pass":"fail");
+     log("MQTT "+(ok?"PASS: ":"FAIL: ")+msg);
+     try{client.end(true)}catch(_){}
+     resolve(ok);
+   };
+   const client=mqtt.connect("wss://mqtt.eclipseprojects.io:443/mqtt",{
+     clientId:"sdb-v5-"+Math.random().toString(16).slice(2),
+     clean:true,connectTimeout:8000,reconnectPeriod:0,
+     keepalive:20
+   });
+   const timer=setTimeout(()=>finish(false,"MQTT connection timeout"),10000);
+   client.on("connect",()=>{clearTimeout(timer);finish(true,"MQTT connection established");});
+   client.on("error",err=>{clearTimeout(timer);finish(false,(err&&err.message)||"MQTT error");});
+   client.on("close",()=>{if(!settled){clearTimeout(timer);finish(false,"MQTT socket closed before connect");}});
+ });
+}
+
+async function runTests(){
+ logEl.textContent="";
+ setStatus("internet","TESTING...","wait");
+ setStatus("ws","TESTING...","wait");
+ setStatus("mqtt","WAITING...","wait");
+ setStatus("broker","WAITING...","wait");
+ await internetTest();
+ await websocketTest();
+ await mqttTest();
+ log("Diagnostic complete.");
+}
+runTests();
 </script>
 </body>
 </html>

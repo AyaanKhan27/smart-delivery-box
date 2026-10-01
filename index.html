@@ -20,7 +20,7 @@ input,select,button{width:100%;font:inherit;padding:12px;border-radius:12px;bord
 button.primary{background:#111827;color:#fff;border:0;font-weight:700}
 button.warn{background:#f59e0b;color:#111;border:0;font-weight:700}
 button.danger{background:#dc2626;color:#fff;border:0;font-weight:700}
-.bay{border:1px solid #e5e7eb;border-radius:14px;padding:13px;margin:9px 0}
+.bay{border:1px solid #e5e7eb;border-radius:14px;padding:13px;margin:9px 0}.pending{background:#fff7ed;border-color:#fed7aa}.open{background:#eff6ff;border-color:#bfdbfe}.secureBtn{background:#16a34a;color:#fff;border:0;font-weight:800}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .hidden{display:none}.otp{font-size:26px;font-weight:800;letter-spacing:6px}.log{font-family:ui-monospace,monospace;font-size:12px;max-height:220px;overflow:auto;background:#111827;color:#d1fae5;border-radius:12px;padding:12px;white-space:pre-wrap}
 </style>
@@ -54,7 +54,7 @@ button.danger{background:#dc2626;color:#fff;border:0;font-weight:700}
       <input id="parcelId" placeholder="Parcel ID / barcode value">
       <input id="recipient" placeholder="Recipient name">
       <select id="size"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select>
-      <button class="primary" onclick="deliverParcel()">DELIVER PARCEL</button>
+      <button id="deliverBtn" class="primary" onclick="deliverParcel()">DELIVER PARCEL</button>
       <div id="lockerMessage" class="muted"></div>
       <div id="lockerBays"></div>
     </div>
@@ -79,11 +79,11 @@ button.danger{background:#dc2626;color:#fff;border:0;font-weight:700}
 const TOPIC='sdb/demo/smart-delivery-box-ayaan-v2';
 const client=mqtt.connect('wss://broker.hivemq.com:8884/mqtt',{clientId:'sdb-web-'+Math.random().toString(16).slice(2),clean:true,reconnectPeriod:2000,connectTimeout:10000,keepalive:30});
 const bays=[
- {id:1,name:'SMALL 1',size:'small',servo:4,led:2,state:'free'},
- {id:2,name:'SMALL 2',size:'small',servo:5,led:19,state:'free'},
- {id:3,name:'MEDIUM 1',size:'medium',servo:6,led:20,state:'free'},
- {id:4,name:'MEDIUM 2',size:'medium',servo:7,led:40,state:'free'},
- {id:5,name:'LARGE 1',size:'large',servo:8,led:41,state:'free'}
+ {id:1,name:'SMALL 1',size:'small',servo:4,led:2,state:'free',reserved:false},
+ {id:2,name:'SMALL 2',size:'small',servo:5,led:19,state:'free',reserved:false},
+ {id:3,name:'MEDIUM 1',size:'medium',servo:6,led:20,state:'free',reserved:false},
+ {id:4,name:'MEDIUM 2',size:'medium',servo:7,led:40,state:'free',reserved:false},
+ {id:5,name:'LARGE 1',size:'large',servo:8,led:41,state:'free',reserved:false}
 ];
 const sizeRank={small:1,medium:2,large:3};
 let audit=[];
@@ -94,22 +94,36 @@ function show(tab){
  render();
 }
 function log(x){audit.unshift(new Date().toLocaleTimeString()+'  '+x);audit=audit.slice(0,100);document.getElementById('log').textContent=audit.join('\n')}
-function publish(obj){client.publish(TOPIC+'/cmd',JSON.stringify(obj));log('CMD '+JSON.stringify(obj))}
+function publish(obj){
+ if(!client.connected){log('MQTT not connected — command not sent');return false}
+ client.publish(TOPIC+'/cmd',JSON.stringify(obj),{qos:1});log('CMD '+JSON.stringify(obj));return true
+}
+function stateLabel(b){
+ if(b.state==='pending') return 'WAITING FOR LOCKER';
+ if(b.awaitingPlacement || b.state==='awaiting_placement') return 'DOOR OPEN — PLACE PARCEL';
+ if(b.state==='collection_open') return 'OPEN — COLLECT';
+ return (b.state||'free').toUpperCase();
+}
 function render(){
- const occ=bays.filter(b=>b.state==='occupied');
- document.getElementById('residentBays').innerHTML=occ.length?occ.map(b=>`
- <div class="bay"><b>${b.name}</b><br>Parcel: ${b.parcel||'—'}<br>Recipient: ${b.recipient||'—'}<br>
- <span class="otp">${b.otp||'----'}</span>
- <input id="otp-${b.id}" inputmode="numeric" maxlength="4" placeholder="Enter OTP">
- <button class="primary" onclick="collect(${b.id})">UNLOCK & COLLECT</button></div>`).join(''):'<p class="muted">No parcels waiting.</p>';
+ const occ=bays.filter(b=>b.state==='occupied' || b.state==='awaiting_placement' || b.state==='collection_open');
+ document.getElementById('residentBays').innerHTML=occ.length?occ.map(b=>{
+   const ready=(b.state==='occupied' && !b.awaitingPlacement);
+   return `<div class="bay ${b.state==='collection_open'?'open':''}"><b>${b.name}</b><br>Parcel: ${b.parcel||'—'}<br>Recipient: ${b.recipient||'—'}<br>
+   ${b.awaitingPlacement?'<div class="muted">Parcel is being placed. OTP will appear after the door is secured.</div>':`<span class="otp">${b.otp||'----'}</span><input id="otp-${b.id}" inputmode="numeric" maxlength="4" placeholder="Enter OTP" ${ready?'':'disabled'}><button class="primary" onclick="collect(${b.id})" ${ready?'':'disabled'}>UNLOCK & COLLECT</button>`}
+   </div>`;
+ }).join(''):'<p class="muted">No parcels waiting.</p>';
 
- document.getElementById('lockerBays').innerHTML=bays.map(b=>`
- <div class="bay"><b>${b.name}</b> · ${b.size} · ${b.state.toUpperCase()} · Servo ${b.servo ?? '—'}°<br>
- ${b.parcel?`Parcel: ${b.parcel} · ${b.recipient||''}`:''}
- </div>`).join('');
+ document.getElementById('lockerBays').innerHTML=bays.map(b=>{
+   const awaiting=b.state==='awaiting_placement'||b.awaitingPlacement;
+   return `<div class="bay ${b.state==='pending'?'pending':''} ${b.doorOpen?'open':''}"><b>${b.name}</b> · ${b.size} · ${stateLabel(b)} · Servo ${b.servo??'—'}°<br>
+   ${b.parcel?`Parcel: ${b.parcel} · ${b.recipient||''}<br>`:''}
+   ${awaiting?`<button class="secureBtn" onclick="secureBay(${b.id})">PARCEL PLACED — SECURE DOOR</button>`:''}
+   ${b.state==='collection_open'?'<div class="muted">Resident is collecting this parcel.</div>':''}
+   </div>`;
+ }).join('');
 
  document.getElementById('adminBays').innerHTML=bays.map(b=>`
- <div class="bay"><b>${b.name}</b> — ${b.state}<br>${b.parcel||''} ${b.recipient||''}
+ <div class="bay"><b>${b.name}</b> — ${stateLabel(b)}<br>${b.parcel||''} ${b.recipient||''}
  <div class="row"><button onclick="adminUnlock(${b.id})">Unlock</button><button onclick="adminClear(${b.id})">Clear</button></div></div>`).join('');
 }
 function deliverParcel(){
@@ -117,26 +131,36 @@ function deliverParcel(){
  const recipient=document.getElementById('recipient').value.trim();
  const size=document.getElementById('size').value;
  if(!parcel||!recipient){document.getElementById('lockerMessage').textContent='Enter parcel ID and recipient.';return}
- // Allocation: smallest free compartment that can hold the parcel.
- const candidates=bays.filter(b=>b.state==='free' && sizeRank[b.size]>=sizeRank[size]).sort((a,b)=>sizeRank[a.size]-sizeRank[b.size]);
+ const candidates=bays.filter(b=>b.state==='free'&&!b.reserved&&sizeRank[b.size]>=sizeRank[size]).sort((a,b)=>sizeRank[a.size]-sizeRank[b.size]);
  if(!candidates.length){document.getElementById('lockerMessage').textContent='No suitable compartment available. Please contact security / use alternate delivery.';return}
  const b=candidates[0];
  const otp=String(Math.floor(1000+Math.random()*9000));
- publish({action:'deliver',compartment:b.id,parcel,recipient,otp,size});
- document.getElementById('lockerMessage').textContent=`Assigned ${b.name}. Courier can place the parcel when the door opens.`;
+ if(!publish({action:'deliver',compartment:b.id,parcel,recipient,otp,size})) return;
+ // Reserve locally immediately so a second parcel cannot select the same bay
+ // while the MQTT state update is travelling back from Cirkit.
+ b.reserved=true;b.state='pending';b.parcel=parcel;b.recipient=recipient;b.otp=otp;b.pendingSince=Date.now();
+ document.getElementById('lockerMessage').textContent=`Assigned ${b.name}. Place the parcel, then press “PARCEL PLACED — SECURE DOOR”.`;
+ document.getElementById('parcelId').value='';document.getElementById('recipient').value='';
+ render();
 }
+function secureBay(id){publish({action:'secure',compartment:id,role:'locker'})}
 function collect(id){
- const b=bays.find(x=>x.id===id);const code=document.getElementById('otp-'+id).value.trim();
+ const b=bays.find(x=>x.id===id);const el=document.getElementById('otp-'+id);const code=el?el.value.trim():'';
  if(!b||b.state!=='occupied'){return}
  if(code!==b.otp){alert('Invalid OTP for this parcel.');return}
  publish({action:'collect',compartment:id,otp:code,role:'resident'});
 }
 function adminUnlock(id){publish({action:'unlock',compartment:id,role:'admin'})}
 function adminClear(id){publish({action:'clear',compartment:id,role:'admin'})}
-function clearAll(){bays.forEach(b=>{if(b.state==='occupied')adminClear(b.id)});log('CLEAR ALL requested')}
+function clearAll(){bays.forEach(b=>{if(b.state!=='free')adminClear(b.id)});log('CLEAR ALL requested')}
 function refreshState(){publish({action:'request_state'})}
 
-client.on('connect',()=>{document.getElementById('mqttStatus').textContent='Connected';document.getElementById('mqttStatus').classList.add('ok');client.subscribe(TOPIC+'/state',{qos:1},()=>{log('MQTT connected');publish({action:'request_state',compartment:1})})});
+client.on('connect',()=>{
+ document.getElementById('mqttStatus').textContent='Connected';document.getElementById('mqttStatus').classList.add('ok');
+ client.subscribe(TOPIC+'/state',{qos:1},()=>{log('MQTT connected');publish({action:'request_state'})});
+});
+client.on('reconnect',()=>{document.getElementById('mqttStatus').textContent='Reconnecting…';document.getElementById('mqttStatus').classList.remove('ok')});
+client.on('offline',()=>{document.getElementById('mqttStatus').textContent='Offline';document.getElementById('mqttStatus').classList.remove('ok')});
 client.on('error',e=>log('MQTT error '+e.message));
 client.on('message',(topic,payload)=>{
  try{
@@ -144,10 +168,24 @@ client.on('message',(topic,payload)=>{
   const b=bays.find(x=>x.id===Number(s.compartment));
   if(!b)return;
   Object.assign(b,s);
-  log('STATE '+JSON.stringify(s));
-  render();
+  b.reserved=(s.occupied===true || s.state!=='free');
+  if(s.state==='free') b.reserved=false;
+  log('STATE '+JSON.stringify(s));render();
  }catch(e){log('Bad state '+e.message)}
 });
+
+// If a command is not acknowledged by the circuit within 12 seconds,
+// don't silently keep the bay blocked in the dashboard.
+setInterval(()=>{
+ bays.forEach(b=>{
+  if(b.state==='pending'&&b.pendingSince&&Date.now()-b.pendingSince>12000){
+   log('No state ACK for '+b.name+' — refreshing circuit state');
+   b.reserved=false;b.state='free';b.pendingSince=0;
+  }
+ });
+ render();
+},3000);
+
 show('resident');
 </script>
 </body>
